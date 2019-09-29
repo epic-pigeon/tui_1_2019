@@ -1,0 +1,158 @@
+    <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Map</title>
+    <script>
+        window.loaded = {
+            _value: false,
+            _list: null,
+            set(val) {
+                this._value = val;
+                if (typeof this._list === "function") this._list(this._value, val);
+            },
+            get() {
+                return this._value;
+            },
+            setListener(list) {
+                this._list = list;
+            }
+        };
+        window.onload = function () {
+            window.loaded.set(true);
+        };
+
+        window.map = null;
+
+        window.onresize = function () {
+            document.getElementById("map").height = document.getElementById("canvas").height = window.outerHeight;
+            document.getElementById("map").width = document.getElementById("canvas").width = window.outerWidth;
+        };
+
+        function safe(fn) {
+            try {
+                return fn();
+            } catch (e) {
+                return false;
+            }
+        }
+
+        function __initMap() {
+            let latlng = new google.maps.LatLng(
+                safe(() => window.COORDS.center.lat) || 39.305,
+                safe(() => window.COORDS.center.lng) || -76.617
+            );
+            let latlng1 = new google.maps.LatLng(
+                safe(() => window.COORDS.bound1.lat) || 38.305,
+                safe(() => window.COORDS.bound1.lng) || -77.617
+            );
+            let latlng2 = new google.maps.LatLng(
+                safe(() => window.COORDS.bound2.lat) || 40.305,
+                safe(() => window.COORDS.bound2.lng) || -75.617
+            );
+            window.map = new google.maps.Map(
+                document.getElementById("map"),
+                {
+                    center: latlng,
+                    zoom: safe(() => window.COORDS.ZOOM) || 8,
+                    mapTypeId: 'satellite'
+                }
+            );
+            window.CanvasOverlay = function(params) {
+                this._bounds = params['bounds'];
+                this._div = null;
+                this._canvas = null;
+                this._bufCanvas = document.createElement("canvas");
+                this._bufCanvas.width = 1000;
+                this._bufCanvas.height = 1000 * ((this._bounds.getSouthWest().lng() - this._bounds.getNorthEast().lng()) / (this._bounds.getSouthWest().lat() - this._bounds.getNorthEast().lat()));
+                this._ctx = this._bufCanvas.getContext("2d");
+            };
+            window.CanvasOverlay.prototype = new google.maps.OverlayView();
+            window.CanvasOverlay.prototype.onAdd = function() {
+                this._div = document.createElement("div");
+                this._div.style.borderStyle = "none";
+                this._div.style.borderWidth = "0px";
+                this._div.style.position = "absolute";
+
+                this._canvas = document.createElement("canvas");
+                this._canvas.style.height = "100%";
+                this._canvas.style.width = "100%";
+                this._canvas.style.position = "absolute";
+
+                this._div.appendChild(this._canvas);
+
+                this.getPanes().overlayLayer.appendChild(this._div);
+            };
+            window.CanvasOverlay.prototype.draw = function() {
+                let coords = {
+                    sw: this.getProjection().fromLatLngToDivPixel(this._bounds.getSouthWest()),
+                    ne: this.getProjection().fromLatLngToDivPixel(this._bounds.getNorthEast())
+                };
+                this._div.style.left = coords.sw.x + "px";
+                this._div.style.top = coords.ne.y + "px";
+                this._div.style.height = (coords.ne.x - coords.sw.x) + "px";
+                this._div.style.width = (coords.sw.y - coords.ne.y) + "px";
+                let dataURL = this._bufCanvas.toDataURL();
+                let image = new Image();
+                image.src = dataURL;
+                image.onload = () => {
+                    this._canvas.height = (coords.ne.x - coords.sw.x);
+                    this._canvas.width = (coords.sw.y - coords.ne.y);
+                    this._canvas.getContext("2d").drawImage(image, 0, 0, this._canvas.width, this._canvas.height);
+                };
+            };
+            window.CanvasOverlay.prototype.onRemove = function() {
+                this._div.parentNode.removeChild(this._div);
+                this._div = null;
+            };
+            window.CanvasOverlay.prototype.getWidth = function() {
+                return this._bufCanvas.width;
+            };
+            window.CanvasOverlay.prototype.getHeight = function() {
+                return this._bufCanvas.height;
+            };
+            window.CanvasOverlay.prototype.getCanvas = function() {
+                return this._canvas;
+            };
+            window.CanvasOverlay.prototype.getContext = function() {
+                return this._ctx;
+            };
+            window.MapOverlay = {};
+            window.MapOverlay.CanvasOverlay = new CanvasOverlay({
+                bounds: new google.maps.LatLngBounds(
+                    latlng1, latlng2
+                )
+            });
+            window.MapOverlay.CanvasOverlay.setMap(window.map);
+        }
+
+        function _initMap() {
+            if (window.loaded.get()) {
+                __initMap();
+            } else {
+                window.loaded.setListener((oldVal, newVal) => {
+                    if (newVal) __initMap();
+                });
+            }
+        }
+    </script>
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            padding: 0;
+            margin: 0;
+        }
+        #map {
+            position: absolute;
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDJmgmQSVRJ5-wJkaTeNK20-zDQCWAt_UY&callback=_initMap"></script>
+</head>
+<body>
+<div id="map"></div>
+<canvas id="canvas"></canvas>
+</body>
+</html>
